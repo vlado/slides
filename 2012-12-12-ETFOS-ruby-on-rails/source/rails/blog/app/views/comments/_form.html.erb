@@ -1,0 +1,17 @@
+<%= form_for [comment.post, comment], :remote => true do |f| -%>
+
+  <%= render 'shared/error_messages', :object => comment %>
+
+  <div class="field">
+    <%= f.label :commenter %><br />
+    <%= f.text_field :commenter %>
+  </div>
+  <div class="field">
+    <%= f.label :body %><br />
+    <%= f.text_area :body %>
+  </div>
+  <div class="actions">
+    <%= f.submit %>
+  </div>
+
+<% end -%>

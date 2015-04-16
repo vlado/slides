@@ -1,0 +1,57 @@
+- rails new blog
+- Configuring a Database
+- rake db:create
+- rails server (Welcome aboard)
+- rails generate controller home index
+- <h1>Hello, Rails!</h1>
+- root :to => "home#index"
+- rails generate scaffold Post name:string title:string content:text
+- Running a Migration
+- rake db:migrate
+- <%= link_to "My Blog", posts_path %>
+- class Post < ActiveRecord::Base
+  attr_accessible :content, :name, :title
+
+  validates :name,  :presence => true
+  validates :title, :presence => true,
+                    :length => { :minimum => 5 }
+end
+- rails console
+- ... p.errors.full_messages
+- Listing All Posts
+- Customizing the Layout
+- Creating New Posts
+- Showing an Individual Post
+- Editing Posts
+- Destroying a Post
+- rails generate model Comment commenter:string body:text post:references
+- belongs_to :post
+- rake db:migrate
+- has_many :comments
+- resources :posts do
+  resources :comments
+end
+- rails generate controller Comments
+- app/views/posts/show.html.erb - form_for [@post, @post.comments.build]
+- class CommentsController < ApplicationController
+  def create
+    @post = Post.find(params[:post_id])
+    @comment = @post.comments.create(params[:comment])
+    redirect_to post_path(@post)
+  end
+end
+- Rendering Partial Collections
+- comments/_comment
+- comments/_form
+- link_to 'Destroy Comment', [comment.post, comment],
+               :confirm => 'Are you sure?',
+               :method => :delete
+-  def destroy
+     @post = Post.find(params[:post_id])
+     @comment = @post.comments.find(params[:id])
+     @comment.destroy
+     redirect_to post_path(@post)
+   end
+
+- has_many :comments, :dependent => :destroy
+- View Helpers (commenter name)

@@ -1,0 +1,38 @@
+- dizajniran za lakši razvoj web aplikacija tako da pretpostvlja šta svakom treba za krenuti
+- omogućuje da se napravi puno posla za malo koda
+- čini ravoj zabavnim
+- rails zna biti tvrdoglav framework, ako neke stvari ne zelite raditi rails way mozete imati problema. Potiče svoj način i
+obeshrabljuje vas da idete drugačije.
+- sljedeći rails way osjetit ćete veliki skok u produktivnosti
+
+PRINCIPI (RAILS WAY):
+- DRY
+- Convention over configuration - pretpostavlja šta želite umjesto da vas davi sa beskonačnom konfiguracijom (vodi vas kao po tračnicama)
+- REST je najbolji patern za web aplikacije - organizacija koda oko resourcesa
+
+ARHITEKTURA:
+- MVC arhitektura
+- Model prezentira podatke s kojim radite, primarno sa bazom podataka. Jedan model prezentira jednu tablicu u bazi. "Business logic" je sadržan u modelima.
+- View je user interface (sučelje). Obično erb templates
+- Controller povezuje model i view. Controller zna šta napraviti sa web requestom, koje podatke povući i prosljediti do view-a.
+
+KOMPONENTE:
+
+- ActionPack
+-- ActionController - procesuira requestove, izvlači parametre i šalje ih akcijama koje ih trebaju, session management, render templejtova, redirekcije
+-- ActionView - odogovoran je za ispis, može izbaciti html ili xml po defaultu, ali json i ostalo je također jednostavno, (po meni i json)
+-- ActionDispatch - odgovoran je za ruting web requestova i dispačiranje do aplikacije ili nekog drugog middlewarea
+- ActionMailer - zadušen za generiranje i slanje mailova
+- ActiveRecord - ORM adapter, database independece, CRUD funkcionalnost, napredni finderi, relacije između modela
+- ActiveResource - veza između business logike (modela) i RESTful web servisa
+- ActiveSupport - skupina korisnih utility metoda i core extensiona
+- Railties - core Rails code odogovran za dizanje aplikacije, povezuje ostale dijelove zajedno
+
+Svaki od ovih komponenti može se izostaviti iz aplikacije ako nije potrebna. Također se može koristiti i izvan railsa.
+
+REST:
+(Representational State Transfer)
+- govori (predlaže) kako bi trebali korsitit HTTP protokol i organizirati URL-ove
+- http://www.infoq.com/articles/rest-introduction
+GET /photos/17
+DELETE /photos/17
