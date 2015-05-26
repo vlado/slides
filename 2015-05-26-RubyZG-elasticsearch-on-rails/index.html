@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>Elasticsearch on Rails</title>
+
+		<meta name="description" content="A framework for easily creating beautiful presentations using HTML">
+		<meta name="author" content="Hakim El Hattab">
+
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css" id="theme">
+
+		<!-- Code syntax highlighting -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+
+		<!--[if lt IE 9]>
+		<script src="lib/js/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<!-- Any section element inside of this container is displayed as a slide -->
+			<div class="slides">
+				<section>
+					<h2>Elasticsearch</h2>
+					<p>on Rails</p>
+					<p>
+						<small>Vlado Cingel / <a href="mailto:vlado@cingel.hr">vlado@cingel.hr</a></small>
+					</p>
+				</section>
+
+				<section data-background="assets/images/es_home.png">
+        </section>
+
+				<section>
+          <h3>Installation</h3>
+          <img data-src="assets/images/es_install.png">
+				</section>
+
+				<section>
+          <h3>Installation on OSX</h3>
+          <pre><code>brew install elasticsearch</code></pre>
+				</section>
+
+				<section>
+          <h3>Putting Elasticsearch on Rails</h3>
+          <pre><code>gem install foreman</code></pre>
+          <small><a href="http://blog.daviddollar.org/2011/05/06/introducing-foreman.html">http://blog.daviddollar.org/2011/05/06/introducing-foreman.html</a></small>
+          <pre style="margin-top:0"><code># {Rails.root}/Procfile
+web: rails server
+eleasticsearch: /path/to/elasticsearch/binary</code></pre>
+          <pre><code>foreman start</code></pre>
+				</section>
+
+				<section>
+          <img data-src="assets/images/es_foreman.png">
+				</section>
+
+				<section>
+          <h3>Ruby libs</h3>
+          <dl>
+            <dt>* (Re)Tire</dt>
+            <dd><small>Renamed and retired in September 2013. Not compatible with Elasticsearch 1.x.</small></dd>
+            <dt>* elasticsearch-ruby</dt>
+            <dd><small>Official Ruby client. elasticsearch-transport + elasticsearch-api</small></dd>
+            <dt>* elasticsearch-rails</dt>
+            <dd><small>Various Ruby and Rails integrations for Elasticsearch</small></dd>
+            <dt>* Chewy</dt>
+            <dd><small>High-level Elasticsearch Ruby framework based on the official elasticsearch-ruby client</small></dd>
+          </dl>
+				</section>
+
+				<section>
+          <p>elasticsearch-rails</p>
+          <img data-src="assets/images/es_rails.png">
+				</section>
+
+				<section>
+          <p>elasticsearch-rails</p>
+          <img data-src="assets/images/es_rails_gems.png">
+				</section>
+
+        <section>
+          <p>elasticsearch-rails</p>
+          <small>Rake tasks</small>
+          <pre style="margin-top:0"><code># lib/tasks/elasticsearch.rake
+require 'elasticsearch/rails/tasks/import'</code></pre>
+          <pre style="margin-bottom:30px"><code>$ rake elasticsearch:import:model CLASS='Article'
+$ rake elasticsearch:import:model CLASS='Article' SCOPE='published'</code></pre>
+          <small>ActiveSupport Instrumentation</small>
+          <pre style="margin-top:0"><code># config/application.rb
+require 'elasticsearch/rails/instrumentation'</code></pre>
+          <pre><code>Article Search (321.3ms) { index: "articles", type: "article", body: { query: ... } }</code></pre>
+        </section>
+
+        <section>
+          <h3 style="text-transform:none">elasticsearch-persistence</h3>
+          <p>Provides persistence layer for Ruby domain objects</p>
+          <p>It supports two design patterns for integrating with your objects: Repository and Active Record.</p>
+        </section>
+
+        <section>
+          <h3 style="text-transform:none">elasticsearch-persistence</h3>
+          <p>Repository</p>
+          <pre><code>class Note
+  attr_reader :attributes
+
+  def initialize(attributes={})
+    @attributes = attributes
+  end
+
+  def to_hash
+    @attributes
+  end
+end</code></pre>
+          <pre><code>require 'elasticsearch/persistence'
+repository = Elasticsearch::Persistence::Repository.new</code></pre>
+        </section>
+
+        <section>
+          <h3 style="text-transform:none">elasticsearch-persistence</h3>
+          <p>Repository</p>
+          <pre><code>note = Note.new id: 1, text: 'Test'
+
+repository.save(note)
+# PUT http://localhost:9200/repository/note/1
+# &gt; {"id":1,"text":"Test"}
+# &lt; {"_index":"repository","_type":"note","_id":"1","_version":1,"created":true}
+
+n = repository.find(1)
+# GET http://localhost:9200/repository/_all/1
+# &lt; {"_index":"repository","_type":"note","_id":"1","_version":2,"found":true, "_source" : {"id":1,"text":"Test"}}
+=&gt; &lt;Note:0x007fcbfc0c4980 @attributes={"id"=&gt;1, "text"=&gt;"Test"}&gt;
+
+repository.search(query: { match: { text: 'test' } }).first
+# GET http://localhost:9200/repository/_search
+# &gt; {"query":{"match":{"text":"test"}}}
+# &lt; {"took":2, ... "hits":{"total":1, ... "hits":[{ ... "_source" : {"id":1,"text":"Test"}}]}}
+=&gt; &lt;Note:0x007fcbfc1c7b70 @attributes={"id"=&gt;1, "text"=&gt;"Test"}&gt;
+
+repository.delete(note)
+# DELETE http://localhost:9200/repository/note/1
+# &lt; {"found":true,"_index":"repository","_type":"note","_id":"1","_version":3}
+=&gt; {"found"=&gt;true, "_index"=&gt;"repository", "_type"=&gt;"note", "_id"=&gt;"1", "_version"=&gt;2}</code></pre>
+        </section>
+
+        <section>
+          <h3 style="text-transform:none">elasticsearch-persistence</h3>
+          <p>Active Record</p>
+          <pre><code>class Article
+  include Elasticsearch::Persistence::Model
+
+  # Define a plain `title` attribute
+  attribute :title,  String
+
+  # Define a `views` attribute, with default value
+  attribute :views,  Integer, default: 0, mapping: { type: 'integer' }
+
+  # Validate the presence of the `title` attribute
+  validates :title, presence: true
+
+  # Execute code after saving the model.
+  after_save { puts "Successfully saved: #{self}" }
+end</code></pre>
+        </section>
+
+        <section>
+          <h3 style="text-transform:none">elasticsearch-persistence</h3>
+          <p>Active Record</p>
+          <pre><code>article = Article.new
+# =&gt; #&lt;Article { ... }&gt;
+
+article.valid?
+# =&gt; false
+
+article.errors.to_a
+# =&gt; ["Title can't be blank"]</code></pre>
+          <pre><code>Article.create id: 1, title: 'Test', author: 'John'
+# PUT http://localhost:9200/articles/article/1 [status:201, request:0.015s, query:n/a]
+
+article = Article.find(1)
+# =&gt; #&lt;Article { ... }&gt;
+
+article.id
+# =&gt; "1"
+
+article.title
+# =&gt; "Test"</code></pre>
+        </section>
+
+				<section>
+          <p>elasticsearch-model</p>
+          <pre><code>class Article &lt; ActiveRecord::Base
+  include Elasticsearch::Model
+end
+
+Article.import
+
+response = Article.search("fox dogs")
+
+response.results
+# =&gt; [#&lt;Elasticsearch::Model::Response::Result:0x007 ... "_source"=&gt;{"title"=&gt;"Quick brown fox"}}&gt;]
+
+response.records.to_a
+# Article Load (0.3ms)  SELECT "articles".* FROM "articles" WHERE "articles"."id" IN (1, 2)
+# =&gt; [#&lt;Article id: 1, title: "Quick brown fox"&gt;, #&lt;Article id: 2, title: "Fast black dogs"&gt;]
+          </code></pre>
+				</section>
+
+        <section>
+          <p>In most situation, you'll want to pass the search definition in the Elasticsearch domain-specific language to the client</p>
+          <pre><code>{
+  "query" : { "match" : { "title" : "Fox Dogs" } },
+  "highlight" : { "fields" : { "title" : {} } }
+}</code></pre>
+          <small>Elasticsearch DSL</small>
+          <pre><code>response = Article.search(
+  query:     { match:  { title: "Fox Dogs" } },
+  highlight: { fields: { title: {} } }
+)
+
+response.results.first.highlight.title
+# ["Quick brown &lt;em&gt;fox&lt;/em&gt;"]</code></pre>
+          <small>elasticsearch-model</small>
+        </section>
+
+        <section>
+          <p>Index configuration</p>
+          <pre><code>class Article &lt; ActiveRecord::Base
+  include Elasticsearch::Model
+
+  index_name: "articles-#{Rails.env}"
+
+  settings index: { number_of_shards: 1 } do
+    mappings dynamic: 'false' do
+      indexes :title, analyzer: 'english', index_options: 'offsets'
+    end
+  end
+
+  ...
+end</code></pre>
+        </section>
+
+        <section>
+          <p>Automatic Callbacks</p>
+          <pre><code>class Article &lt; ActiveRecord::Base
+  include Elasticsearch::Model
+  include Elasticsearch::Model::Callbacks
+end</code></pre>
+          <pre><code>Article.first.update_attribute :title, 'Updated!'
+
+Article.search('*').map { |r| r.title }
+# =&gt; ["Updated!", "Lime green frogs", "Fast black dogs"]</code></pre>
+        <small>In case you would need more control of the indexing process, you can implement these callbacks yourself, by hooking into after_* callbacks</small>
+        </section>
+
+        <section>
+          <p>Model serialization</p>
+          <p><small>Method <code>as_indexed_json</code> is defined automatically by the Elasticsearch::Model::Serializing module.</small></p>
+          <p><small>Just implement the <code>as_indexed_json</code> yourself to define custom serialization</small></p>
+          <pre><code>class Article
+  include Elasticsearch::Model
+
+  def as_indexed_json(options={})
+    { title: "title", author: author.name }
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h2>Personal experience</h2>
+        </section>
+
+        <section>
+          <pre><code># app/models/physician.rb
+class Physician &lt; ActiveRecord::Base
+  include Elasticsearch::Model
+
+  ANALYSIS_SETTINGS = { ... }
+  index_name "appname-physicians-#{Rails.env}"
+  after_commit :refresh_elasticsearch_index
+
+  settings index: { analysis: ANALYSIS_SETTINGS } do
+    mappings dynamic: false do
+      indexes :first_name, index_analyzer: "autocomplete", search_analyzer: "standard"
+      indexes :last_name, index_analyzer: "autocomplete", search_analyzer: "standard"
+      # ...
+    end
+  end
+
+  def as_indexed_json(options: {})
+    {
+      id: id,
+      first_name: first_name,
+      primary_specialization_name: primary_specialization.name
+      # ...
+    }
+  end
+
+end</code></pre>
+        </section>
+
+        <section>
+          <p>Feature Extraction Pattern</p>
+          <pre><code># app/models/physician/elastically_searchable.rb
+class Physician
+  module ElasticallySearchable
+    extend ActiveSupport::Concern
+
+    included do
+      include Elasticsearch::Model
+      ANALYSIS_SETTINGS = { ... }
+      index_name "appname-physicians-#{Rails.env}"
+      after_commit :refresh_elasticsearch_index
+      # ...
+    end
+
+    def as_indexed_json(options: {})
+      # ...
+    end
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <pre><code># lib/elasticsearch_support.rb
+module ElasticsearchSupport
+end</code></pre>
+        </section>
+
+        <section>
+          <pre><code># lib/elasticsearch_support/elastically_searchable_active_record.rb
+module ElasticsearchSupport
+  module ElasticallySearchableActiveRecord
+    extend ActiveSupport::Concern
+
+    included do
+      include Elasticsearch::Model
+      # ...
+    end
+  end
+end</code></pre>
+
+          <pre><code># app/models/physician/elastically_searchable.rb
+class Physician
+  module ElasticallySearchable
+  extend ActiveSupport::Concern
+  include ElasticsearchSupport::ElasticallySearchableActiveRecord
+  # ...
+end
+          </code></pre>
+        </section>
+
+        <section>
+          <p>Custom callbacks</p>
+          <pre><code># lib/elasticsearch_support/elastically_searchable_active_record.rb
+module ElasticsearchSupport
+  module ElasticallySearchableActiveRecord
+    extend ActiveSupport::Concern
+
+    included do
+      include Elasticsearch::Model
+      after_commit :refresh_in_elasticsearch, on: [:create, :update]
+      after_commit :remove_form_elasticsearch, on: :destroy
+    end
+
+    def elastically_searchable?
+      fail NotImplementedError.new("You must define 'elastically_searchable?' method")
+    end
+
+    private
+    def refresh_in_elasticsearch
+      ElasticsearchSupport::RefreshDocumentJob.perform_later(self)
+    end
+
+    def remove_form_elasticsearch
+      # Do not use ActiveJob here
+      __elasticsearch__.delete_document
+    end
+  end
+end</code></pre>
+          <pre><code># app/models/physician/elastically_searchable.rb
+class Physician
+  module ElasticallySearchable
+    def elastically_searchable?
+      active? && public?
+    end
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <p>ActiveJob to refresh document index</p>
+          <pre><code># lib/elasticsearch_support/refresh_document_job.rb
+module ElasticsearchSupport
+  class RefreshDocumentJob &lt; ActiveJob::Base
+    queue_as :default
+
+    def perform(rec)
+      if rec.elastically_searchable?
+        update_in_elasticsearch(rec)
+      else
+        remove_from_eleasticsearch(rec)
+      end
+    end
+
+    private
+    def remove_from_eleasticsearch(rec)
+      rec.__elasticsearch__.delete_document
+    rescue Elasticsearch::Transport::Transport::Errors::NotFound
+      # document wasn't found, so don't bother removing it again
+    end
+
+    def update_in_elasticsearch(rec)
+      rec.__elasticsearch__.update_document
+    end
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <p>One class per search</p>
+          <pre><code># app/models/physician/search_to_recommend.rb
+class Physician
+  class SearchToRecommend
+
+    def call(inquiry, query)
+      Physician.__elasticsearch__.search(
+        query: {
+          filtered: {
+            query: query_hash(query),
+            filter: filter_hash(inquiry)
+          }
+        },
+        highlight: highlight_hash
+      )
+    end
+
+    private
+    def query_hash(query)
+      # logic to return q hash
+    end
+
+    def filter_hash(inquiry)
+      # logic to return filter hash
+    end
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>Reindex</h3>
+          <pre><code># lib/elasticsearch_support/elastically_searchable_active_record.rb
+module ElasticsearchSupport
+  module ElasticallySearchableActiveRecord
+    included do
+      scope "elastically_searchable", -&gt; {
+        fail NotImplementedError.new("You must define 'elastically_searchable' class method")
+      }
+    end
+  end
+end</code></pre>
+          <pre><code># app/models/physician/elastically_searchable.rb
+class Physician
+  module ElasticallySearchable
+    included do
+      scope "elastically_searchable", -&gt; { where(state: "active") }
+    end
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>REINDEX</h3>
+          <pre><code># lib/elasticsearch_support/reindex_records.rb
+module ElasticsearchSupport
+  class ReindexRecords
+    def call(klass)
+      @klass = klass
+      @index_name = [@klass.index_name, start_time.to_s(:number)].join("_")
+
+      create_index!
+      import_records!
+      create_alias!
+    end
+
+    private
+    def client
+      @klass.__elasticsearch__.client
+    end
+  end
+end</code></pre>
+          <pre><code>ElasticsearchSupport::ReindexRecords.new.call(Physician)</code></pre>
+        </section>
+
+        <section>
+          <h3>REINDEX</h3>
+          <pre><code># lib/elasticsearch_support/reindex_records.rb
+module ElasticsearchSupport
+  class ReindexRecords
+
+    def create_index!
+      @klass.__elasticsearch__.create_index!(index: @index_name, force: true)
+    end
+
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>REINDEX</h3>
+          <pre><code># lib/elasticsearch_support/reindex_records.rb
+module ElasticsearchSupport
+  class ReindexRecords
+
+    def import_records!
+      @klass.elastically_searchable.find_in_batches(batch_size: 1000) do |group|
+        group_for_bulk = group.map do |record|
+          { index: { _id: record.id, data: record.as_indexed_json } }
+        end
+        client.bulk(index: @index_name, type: @klass.to_s.underscore, body: group_for_bulk)
+      end
+    end
+
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>REINDEX</h3>
+          <pre><code># lib/elasticsearch_support/reindex_records.rb
+module ElasticsearchSupport
+  class ReindexRecords
+
+    def create_alias!
+      client.indices.put_alias(index: @index_name, name: @klass.index_name)
+      delete_old_aliases!
+    end
+
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>Reindex problem</h3>
+        </section>
+
+        <section>
+          <h3>Reindex problem</h3>
+          <p>Changes during reindex are lost</p>
+        </section>
+
+        <section>
+          <h3>Reindex Fix</h3>
+          <pre><code># lib/elasticsearch_support/reindex_records.rb
+module ElasticsearchSupport
+  class ReindexRecords
+    def call(klass)
+      @klass = klass
+      @index_name = [@klass.index_name, start_time.to_s(:number)].join("_")
+
+      # Start monitoring and persist changes during reindex
+      ElasticsearchSupport::ReindexUpdaterStore.start(@klass)
+      create_index!
+      import_records!
+      create_alias!
+      # Stop monitoring and update records changed during reindex
+      ElasticsearchSupport::ReindexUpdaterStore.stop(@klass)
+    end
+  end
+end</code></pre>
+          <small>Example using Redis https://gist.github.com/vlado/52d77e12b86579da3728</small>
+        </section>
+
+        <section>
+          <h3>Reindex Fix</h3>
+          <pre><code># lib/elasticsearch_support/refresh_document_job.rb
+module ElasticsearchSupport
+  class RefreshDocumentJob &lt; ActiveJob::Base
+    queue_as :default
+
+    def perform(rec)
+      # ...
+      ElasticsearchSupport::ReindexUpdaterStore.store(record.class, record.id)
+    end
+
+  end
+end</code></pre>
+        </section>
+        <section>
+          <h2>Testing Elasticsearch</h2>
+        </section>
+
+        <section>
+          <h3>Test server</h3>
+          <dl>
+            <dt>* Development server<dt>
+            <dd>No special setup needed, make sure you use Rails env in index name</dd>
+            <dt>* Elasticsearch::Extension::Test</dt>
+            <dd>Ruby class for starting and stopping a separate testing in-memory cluster. Few simple steps to setup, should be faster</dd>
+          </dl>
+        </section>
+
+        <section>
+          <pre><code># spec/support/elasticsearch_test_helpers.rb
+module ElasticsearchTestHelpers
+  # helpers will be defined here
+end</code></pre>
+        </section>
+
+        <section>
+          <pre><code># spec/spec_helper.rb
+RSpec.configure do |config|
+  config.include ElasticsearchTestHelpers
+
+  config.before(:each) do
+    if self.class.metadata[:elasticsearch]
+      prepare_elasticsearch
+    else
+      stub_elasticsearch
+    end
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <pre><code># spec/support/elasticsearch_test_helpers.rb
+def stub_elasticsearch
+  stub_request(:any, /.*localhost:9200\/.*/).to_return(body: "{}")
+end</code></pre>
+        </section>
+
+        <section>
+          <pre><code># spec/support/elasticsearch_test_helpers.rb
+def prepare_elasticsearch
+  Physician.__elasticsearch__.create_index!(force: true)
+end</code></pre>
+        </section>
+
+        <section>
+          <pre><code>require "spec_helper"
+
+describe "Physician", :elasticsearch do
+  it "does something" do
+    physician = Physician.create({})
+    expect(physician).to be_indexed_in_elasticsearch
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>Quick Fix</h3>
+          <pre><code>require "spec_helper"
+
+describe "Physician", :elasticsearch do
+  it "does something" do
+    physician = Physician.create({})
+    sleep 1
+    expect(physician).to be_indexed_in_elasticsearch
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>Quick Fix 2</h3>
+          <pre><code>require "spec_helper"
+
+describe "Physician", :elasticsearch do
+  it "does something" do
+    physician = Physician.create({})
+    sleep 2
+    expect(physician).to be_indexed_in_elasticsearch
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>Quick Fix 3</h3>
+          <pre><code>require "spec_helper"
+
+describe "Physician", :elasticsearch do
+  it "does something" do
+    physician = Physician.create({})
+    sleep 3
+    expect(physician).to be_indexed_in_elasticsearch
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>Hammer Fix</h3>
+          <pre><code># spec/support/elasticsearch_test_helpers.rb
+module ElasticsearchTestHelpers
+  def prepare_elasticsearch
+    # ...
+    $physicians_to_index = []
+  end
+
+  def make_sure_physician_changes_are_indexed(&block)
+    track_physicians_to_index
+    perform_enqueued_jobs { block.call }
+    wait_for "elasticsearch to reindex physicians", wait_time: 5.seconds do
+      indexed_ids = Physician.__elasticsearch__.search(
+        query: { match_all: {} }
+      ).map { |res| res._id.to_i }
+      $physicians_to_index.uniq.sort == indexed_ids
+    end
+  end
+
+  private
+
+  def track_physicians_to_index
+    return if Physician._commit_callbacks.map(&:filter).include?(:register_elasticsearch_index_state)
+    Physician.class_eval do
+      after_commit :register_elasticsearch_index_state
+      private
+      def register_elasticsearch_index_state
+        action = elastically_searchable? ? :push : :delete
+        $physicians_to_index.send(action, id)
+      end
+    end
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>Fixed with Hammer</h3>
+          <pre><code>require "spec_helper"
+
+describe "Physician", :elasticsearch do
+  it "does something" do
+    make_sure_physician_changes_are_indexed do
+      physician = Physician.create({})
+    end
+    expect(physician).to be_indexed_in_elasticsearch
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <h3>REAL FIX</h3>
+          <p>Elasticsearch Index API has Refresh option</p>
+          <p><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html#index-refresh">https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html#index-refresh</a></p>
+          <img data-src="assets/images/es_index_api_refresh.png">
+        </section>
+
+        <section>
+          <h3>REAL FIX</h3>
+          <pre><code># lib/elasticsearch_support/refresh_document_job.rb
+module ElasticsearchSupport
+  class RefreshDocumentJob &lt; ActiveJob::Base
+    queue_as :default
+
+    def perform(rec)
+      # ...
+    end
+
+    private
+    def refresh
+      Rails.env.test?
+    end
+
+    def remove_from_eleasticsearch(rec)
+      rec.__elasticsearch__.delete_document(refresh: refresh)
+    rescue Elasticsearch::Transport::Transport::Errors::NotFound
+      # document wasn't found, so don't bother removing it again
+    end
+
+    def update_in_elasticsearch(rec)
+      rec.__elasticsearch__.update_document(refresh: refresh)
+    end
+  end
+end</code></pre>
+        </section>
+
+        <section>
+          <img data-src="assets/images/rtfm.jpg">
+        </section>
+
+        <section>
+          <h1>THANK YOU!<h1>
+          <img class="fragment" data-fragment-index="0" data-src="assets/images/brad.gif">
+        </section>
+
+        <section>
+         <h1>QUESTIONS?</h1>
+          <p><a href="mailto:vlado@cingel.hr" >vlado@cingel.hr</a></p>
+        </section>
+
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+
+			// Full list of configuration options available at:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+
+				transition: 'slide', // none/fade/slide/convex/concave/zoom
+
+				// Optional reveal.js plugins
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, condition: function() { return !!document.querySelector( 'pre code' ); }, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true },
+					{ src: 'plugin/notes/notes.js', async: true }
+				]
+			});
+
+		</script>
+
+	</body>
+</html>
