@@ -1,0 +1,666 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>Organising complex SQL queries in Rails</title>
+
+		<link rel="stylesheet" href="css/reset.css">
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="lib/css/monokai.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+    <style>
+      .reveal h2 {
+        text-transform:none;
+      }
+      .reveal dd {
+        display: list-item;
+        list-style-type:disc;
+        margin-left:60px;
+      }
+    </style>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<section>
+					<h2>Organising complex SQL queries in Rails</h2>
+					<p>
+          <small>Vlado Cingel<br><a href="mailto:vlado@cingel.hr">vlado@cingel.hr</a></small>
+					</p>
+				</section>
+
+				<section>
+					<h2>BetterDoc GmbH</h2>
+					<p>
+						<small>Besser zum richtigen Arzt</small>
+					</p>
+				</section>
+
+        <section>
+          <img src="assets/images/chairs_petrica.jpg" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/chairs.jpg" class="stretch">
+        </section>
+
+				<section>
+					<h2>Active Record Query Interface</h2>
+					<p>
+						<small>Makes it super simple to organise SQL queries using Scopes and Relations</small>
+					</p>
+				</section>
+
+				<section>
+          <pre><code data-trim>
+          class Post
+            has_many :comments
+
+            scope :published, -> { where(published: true) }
+            scope :not_published, -> { where(published: false) }
+            scope :from_category, ->(category) { where(category: category) }
+            scope :latest, -> { limit(10) }
+          end
+
+          class Comment
+            belongs_to :post
+
+            scope :approved, -> { where(approved: true) }
+          end
+          </code></pre>
+
+          <div class="fragment">
+            ActiveRecord::Relation returned
+          </div>
+        </section>
+
+        <section>
+          Which allow us to:
+        </section>
+
+        <section>
+          Chain (call further methods) on them
+
+          <pre><code data-trim>
+          Post.published
+          Comment.approved
+
+          Post.from_category("ruby").latest.merge(Post.published)
+          Comment.approved.joins(:post).where(post: Post.published)
+
+          pots = Post.find(1)
+          post.comments.approved
+          post.comments.approved.where(approved_at: (1.week.ago..Time.zone.today))
+          </code></pre>
+        </section>
+
+        <section>
+          Perform calculations on them
+
+          <pre><code data-trim>
+          posts = Post.published.from_category("ruby")
+
+          posts.count
+          posts.average("words_count")
+          posts.min("words_count")
+          posts.max("words_count")
+          posts.sum("words_count")
+          </code></pre>
+        </section>
+
+        <section>
+          Create, Update or Delete using them
+
+          <pre><code data-trim>
+          Post.not_published.delete_all
+
+          Post.not_published.update_all(published: true)
+
+          post.comments.approved.create(content: "New approved comment")
+          </code></pre>
+        </section>
+
+        <section>
+          Lazy load and Cache them
+
+          <pre><code data-trim>
+          # app/controllers/posts_controller.rb
+          @posts = Post.published
+
+          # app/views/posts/index.html.erb
+          <% cache(@posts) do %>
+            <% @posts.each do |post| %>
+              <h1><%= post.title %></h1>
+              ...
+            <% end %>
+          <% end %>
+          </code></pre>
+        </section>
+
+        <section>
+          <h1>But...</h1>
+          <p class="fragment">What to do when ActiveRecord just isn't enough?</p>
+        </section>
+
+        <section>
+          <img src="assets/images/kobaye.jpg" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/sql.png" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/erd.png" class="stretch">
+        </section>
+
+				<section>
+          <pre><code data-trim>
+          class Clinic
+            has_many :case_numbers
+          end
+
+          class CaseNumber
+            belongs_to :clinic
+          end
+          </code></pre>
+        </section>
+
+        <section>
+          <img src="assets/images/sql_results_1.png" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/sql_results_2.png" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/sql_results_3.png" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/boys.jpg" class="stretch">
+        </section>
+
+				<section>
+          <h2>Iteration 1: Plain SQL</h2>
+          <pre><code data-trim>
+          class ClinicsSqlBuilder
+            QUERY = <<-SQL
+              WITH relevant_clinics AS (
+                SELECT clinics.id, clinics.name, SUM(case_numbers.count) AS cases_count FROM clinics INNER JOIN case_numbers ON case_numbers.clinic_id = clinics.id WHERE case_numbers.code LIKE :code GROUP BY clinics.id
+              ), stats AS (
+                SELECT PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY cases_count DESC) AS quartile_2, PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY cases_count DESC) AS quartile_1 FROM relevant_clinics
+              )
+              SELECT id, name, cases_count, CASE ... END AS RANK FROM relevant_clinics ORDER BY cases_count DESC
+            SQL
+
+            def sql_for_clinics_matching(code)
+              ActiveRecord::Base.sanitize_sql_array([QUERY, code: "#{code}%"])
+            end
+          end
+          </code></pre>
+        </section>
+
+				<section>
+          <p>Iteration 1: Plain SQL</p>
+          <pre><code data-trim>
+          sql_builder = ClinicsSqlBuilder.new
+
+          Clinic.find_by_sql(sql_builder.sql_for_clinics_matching("F4"))
+          </code></pre>
+        </section>
+
+				<section>
+          <p>Iteration 1: Plain SQL</p>
+          <pre><code data-trim>
+          class ClinicsSqlBuilder
+            RELEVANT_CLINICS_CTE = <<-SQL
+              WITH relevant_clinics AS (
+                SELECT clinics.id, clinics.name, SUM(case_numbers.count) AS cases_count FROM clinics INNER JOIN case_numbers ON case_numbers.clinic_id = clinics.id WHERE case_numbers.code LIKE :code GROUP BY clinics.id
+              ), stats AS (
+                SELECT PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY cases_count DESC) AS quartile_2, PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY cases_count DESC) AS quartile_1 FROM relevant_clinics
+              )
+            SQL
+
+            def sql_for_clinics_matching(code)
+              sql = <<-SQL
+                #{RELEVANT_CLINICS_CTE}
+                SELECT id, name, cases_count, CASE ... END AS RANK FROM relevant_clinics ORDER BY cases_count DESC
+              SQL
+              ActiveRecord::Base.sanitize_sql_array([sql, code: "#{code}%"])
+            end
+
+            def count_sql_for_clinics_matching(code)
+              sql = <<-SQL
+                #{RELEVANT_CLINICS_CTE}
+                SELECT count(*) FROM relevant_clinics ORDER BY cases_count DESC
+              SQL
+              ActiveRecord::Base.sanitize_sql_array([sql, code: "#{code}%"])
+            end
+          end
+          </code></pre>
+        </section>
+
+				<section>
+          <p>Iteration 1: Plain SQL</p>
+          <pre><code data-trim>
+          sql_builder = ClinicSqlBuilder.new
+
+          Clinic.find_by_sql(sql_builder.sql_for_clinics_matching("F4"))
+          Clinic.count_by_sql(sql_builder.sql_for_clinics_matching("F4"))
+          </code></pre>
+        </section>
+
+        <section>
+          <p>Iteration 1: Plain SQL</p>
+
+          <table>
+            <tbody>
+              <tr>
+                <td>Chainable</td>
+                <td>&#x1F61E;</td>
+              </tr>
+              <tr>
+                <td>Calculations</td>
+                <td>&#x1F61E;</td>
+              </tr>
+              <tr>
+                <td>Create, Update, Delete</td>
+                <td>&#x1F61E;</td>
+              </tr>
+              <tr>
+                <td>Lazy Load</td>
+                <td>&#x1F61E;</td>
+              </tr>
+              <tr>
+                <td>Cache</td>
+                <td>&#x1F61E;</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section>
+          <p>iteration 1: plain sql</p>
+          <dl>
+            <dt>pros:</dt>
+            <dd>simple and readable</dd>
+            <dd>easy to debug</dd>
+            <dd>probably the best option for big reports and exports</dd>
+
+            <dt>cons:</dt>
+            <dd>no activerecord::relation flexibility</dd>
+            <dd>hard to combine them in different ways</dd>
+          </dl>
+        </section>
+
+        <section>
+          <h2>Iteration 2: Arel</h2>
+          <ul>
+            <li>Relation Algebra for Ruby</li>
+            <li>Generate AST and builds SQL query</li>
+            <li>Knows nothing about your models and database</li>
+            <li>Does not read or write the data</li>
+          </ul>
+        </section>
+
+        <section>
+          <img src="assets/images/arel.jpg" class="stretch">
+        </section>
+
+        <section>
+          <p>Iteration 2: Arel</p>
+          <pre><code data-trim>
+          Clinic.arel_table # => Arel::Table
+          Clinic.arel_table[:name] # => Arel::Attributes::Attribute
+
+          Clinic.arel_table.project(Arel.star) # => Arel::SelectManager
+          Clinic.all.arel # => Arel::SelectManager
+
+          clinics_table = Clinic.arel_table
+          clinics_table.where(clinics_table[:name].eq("Rebro"))
+          # SELECT * FROM clinics WHERE clinics.name = 'Rebro'
+          </code></pre>
+        </section>
+
+        <section>
+          <p>Iteration 2: Arel</p>
+          <pre><code data-trim>
+          class Clinic
+            has_many :case_numbers
+
+            scope :matches_medical_topic, -> (q) {
+              joins(:case_numbers)
+                .where(CaseNumber.arel_table[:code].matches("#{q}%"))
+            }
+          end
+
+          Clinic.matches_medical_topic("f4")
+          # => ActiveRecord::Relation
+          # SELECT "clinics".* FROM "clinics"
+          #   INNER JOIN "case_numbers" ON "case_numbers"."clinic_id" = "clinics"."id"
+          #   WHERE "case_numbers"."code" ILIKE 'f4%'
+          </code></pre>
+        </section>
+
+        <section>
+          <p>Iteration 2: Arel</p>
+          <pre><code data-trim>
+          class Clinic
+            has_many :case_numbers
+            scope :matches_medical_topic, -> (q) { joins(:case_numbers).where(CaseNumber.arel_table[:code].matches("#{q}%")) }
+
+            def self.search(q)
+              relevant_clinics_table = Arel::Table.new(:relevant_clinics)
+              relevat_clinics_expression = matches_medical_topic(q)
+                .select(arel_table[:id], arel_table[:name], CaseNumber.arel_table[:count].sum.as("cases_count"))
+                .group("clinics.id")
+                .arel
+
+              stats_table = Arel::Table.new(:stats)
+              stats_expression = select("PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY cases_count DESC) AS quartile_2")
+                .select("PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY cases_count DESC) AS quartile_1")
+                .from(relevant_clinics_table)
+                .arel
+
+              statement = arel_table
+                .project(
+                  relevant_clinics_table[:id],
+                  relevant_clinics_table[:name],
+                  relevant_clinics_table[:cases_count],
+                  "CASE WHEN cases_count > (SELECT quartile_2 FROM stats) THEN 'High' WHEN cases_count > (SELECT quartile_1 FROM stats) THEN 'Average' ELSE 'Low' END as rank"
+                )
+                .with([
+                  Arel::Nodes::As.new(relevant_clinics_table, relevat_clinics_expression),
+                  Arel::Nodes::As.new(stats_table, stats_expression)
+                ])
+                .from(relevant_clinics_table)
+                .order(relevant_clinics_table[:cases_count].desc)
+
+              find_by_sql(statement.to_sql)
+            end
+          end
+
+          Clinic.search("f4")
+          </code></pre>
+        </section>
+
+        <section>
+          <img src="assets/images/arel_vs_sql.jpg" class="stretch">
+        </section>
+
+        <section>
+          <p>Iteration 2: Arel</p>
+          <pre><code data-trim>
+          case_numbers = CaseNumber.arel_table
+          cte_table = Arel::Table.new(:cool_case_numbers)
+          cte_table_expression = case_numbers.where(case_numbers[:code].eq("cool"))
+
+          clinics = Clinic.arel_table
+          clinic_ids = clinics
+            .project(clinics[:id])
+            .join(cte_table).on(clinics[:id].eq(cte_table[:clinic_id]))
+            .with(Arel::Node::As.new(cte_table, cte_expression))
+
+          Clinic.where(clinics[:id].in(clinic_ids))
+          </code></pre>
+        </section>
+
+        <section>
+          <p>Iteration 2: Arel</p>
+
+          <table>
+            <tbody>
+              <tr>
+                <td>Chainable</td>
+                <td>&#x1F610;</td>
+              </tr>
+              <tr>
+                <td>Calculations</td>
+                <td>&#x1F610;</td>
+              </tr>
+              <tr>
+                <td>Create, Update, Delete</td>
+                <td>&#x1F610;</td>
+              </tr>
+              <tr>
+                <td>Lazy Load</td>
+                <td>&#x1F610;</td>
+              </tr>
+              <tr>
+                <td>Cache</td>
+                <td>&#x1F610;</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section>
+          <p>Iteration 2: Arel</p>
+          <dl>
+            <dt>Pros:</dt>
+            <dd>Super Powers</dd>
+
+            <dt>Cons:</dt>
+            <dd>Noisy</dd>
+            <dd>Requires some workarounds to return ActiveRecord::Relation</dd>
+            <dd>Undocumented</dd>
+          </dl>
+        </section>
+
+        <section>
+          <h2>Iteration 3: Extend Rails</h2>
+          <p class="fragment">How hard can it be to add CTE support to Rails?</p>
+          <p class="fragment"><code>.with</code> is already in the Arel ...</p>
+          <p class="fragment">so it shouldn't be too hard i guess?</p>
+        </section>
+
+        <section>
+          <img src="assets/images/postgres_ext.jpg" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/postgres_ext_readme.jpg" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/postgres_ext_tests.jpg" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/postgres_ext_implementation.jpg" class="stretch">
+        </section>
+
+				<section>
+          <p>Iteration 3: Extend Rails</p>
+          <pre><code data-trim>
+          module ActiveRecord
+            module Querying
+              delegate :with, to: :all
+            end
+
+            class Relation
+              def with(opts, *rest)
+                return self if opts.blank?
+
+                spawn.with!(opts, *rest)
+              end
+
+              def with!(opts, *rest)
+                self.with_values += [opts] + rest
+                self
+              end
+
+              def with_values
+                @values[:with] || []
+              end
+
+              def with_values=(values)
+                raise ImmutableRelation if @loaded
+                @values[:with] = values
+              end
+
+              def build_arel(aliases)
+                arel = super(aliases)
+                build_with!(arel) if @values[:with]
+                arel
+              end
+
+              def build_with!(arel)
+                return if with_values.empty?
+
+                with_statements = with_values.map do |with_value|
+                  with_value.map do |name, expression|
+                    table = Arel::Table.new(name)
+                    select = Arel::Nodes::SqlLiteral.new("(#{expression.to_sql})")
+                    Arel::Nodes::As.new(table, select)
+                  end
+                end
+
+                arel.with with_statements
+              end
+            end
+          end
+          </code></pre>
+        </section>
+
+				<section>
+          <p>Iteration 3: Extend Rails</p>
+          <pre><code data-trim>
+          class Clinic
+            has_many :case_numbers
+            scope :matches_medical_topic, -> (q) {
+              joins(:case_numbers).where(CaseNumber.arel_table[:code].matches("#{q}%"))
+            }
+
+            def self.search(q)
+              relevant_clinics = matches_medical_topic(q)
+                .select(arel_table[:id], arel_table[:name], CaseNumber.arel_table[:count].sum.as("cases_count"))
+                .group(arel_table[:id])
+
+              stats = select(
+                  "PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY cases_count DESC) AS quartile_2",
+                  "PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY cases_count DESC) AS quartile_1"
+                )
+                .from("relevant_clinics")
+
+              with(relevant_clinics: relevant_clinics, stats: stats)
+                .from("relevant_clinics clinics")
+                .order("cases_count DESC")
+            end
+          end
+          </code></pre>
+        </section>
+
+        <section>
+          <img src="assets/images/ar_rel_vs_sql_cheat.jpg" class="stretch">
+        </section>
+
+        <section>
+          <img src="assets/images/ar_rel_vs_sql.jpg" class="stretch">
+        </section>
+
+        <section>
+          <h2>iteration 2: Extend Rails</h2>
+          <dl>
+            <dt>Pros:</dt>
+            <dd>Readable</dd>
+            <dd>Flexible</dd>
+            <dd>All ActiveRecord::Relation goodies</dd>
+
+            <dt>Cons:</dt>
+            <dd>Too Sexy</dd>
+          </dl>
+        </section>
+
+        <section>
+          <h2>Other options?</h2>
+        </section>
+
+        <section>
+          <h2>Database views</h2>
+          <pre><code data-trim>
+          CREATE VIEW cool_clinics AS (
+            SELECT sum(count) ...
+          )
+          SELECT * FROM cool_clinics
+          </code></pre>
+
+          <ul>
+            <li>Stored set of queries against underlying tables</li>
+            <li>Great for reports, full-text search across multiple models</li>
+            <li>No out-of-the-box support in Rails</li>
+            <li>https://github.com/scenic-views/scenic</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Sequel</h2>
+          <img src="assets/images/sequel_cte.jpg" class="stretch">
+        </section>
+
+        <section>
+          <h2>Sequel</h2>
+          <pre><code data-trim>
+          CREATE VIEW cool_clinics AS (
+            SELECT sum(count) ...
+          )
+          SELECT * FROM cool_clinics
+          </code></pre>
+
+          <ul>
+            <li>Small core + plugin system</li>
+            <li>Superior to ActiveRecord</li>
+            <li>Simplicity of ActiveRecord and power of Arel</li>
+            <li>Doesn't come with the Rails</li>
+            <li>No schema file</li>
+            <li>https://twin.github.io/ode-to-sequel/</li>
+          </ul>
+        </section>
+
+        <section>
+          <h1>THANK YOU!<h1>
+          <img class="fragment" data-src="assets/images/brad.gif">
+        </section>
+
+        <section>
+         <h1>QUESTIONS?</h1>
+         <p>... and answers maybe :)</p>
+          <p><a href="mailto:vlado@cingel.hr" >vlado@cingel.hr</a></p>
+        </section>
+			</div>
+		</div>
+
+		<script src="js/reveal.js"></script>
+
+		<script>
+			// More info about config & dependencies:
+			// - https://github.com/hakimel/reveal.js#configuration
+			// - https://github.com/hakimel/reveal.js#dependencies
+			Reveal.initialize({
+        hash: true,
+
+				dependencies: [
+					{ src: 'plugin/markdown/marked.js' },
+					{ src: 'plugin/markdown/markdown.js' },
+					{ src: 'plugin/notes/notes.js', async: true },
+					{ src: 'plugin/highlight/highlight.js', async: true }
+				]
+			});
+		</script>
+	</body>
+</html>
