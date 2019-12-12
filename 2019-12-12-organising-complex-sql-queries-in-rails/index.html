@@ -42,12 +42,9 @@
 					</p>
 				</section>
 
-				<section>
-					<h2>BetterDoc GmbH</h2>
-					<p>
-						<small>Besser zum richtigen Arzt</small>
-					</p>
-				</section>
+        <section>
+          <img src="assets/images/betterdoc.jpg" class="stretch">
+        </section>
 
         <section>
           <img src="assets/images/chairs_petrica.jpg" class="stretch">
@@ -216,7 +213,7 @@
         </section>
 
 				<section>
-          <p>Iteration 1: Plain SQL</p>
+          <h2>Iteration 1: Plain SQL</h2>
           <pre><code data-trim>
           sql_builder = ClinicsSqlBuilder.new
 
@@ -225,7 +222,6 @@
         </section>
 
 				<section>
-          <p>Iteration 1: Plain SQL</p>
           <pre><code data-trim>
           class ClinicsSqlBuilder
             RELEVANT_CLINICS_CTE = <<-SQL
@@ -266,7 +262,7 @@
         </section>
 
         <section>
-          <p>Iteration 1: Plain SQL</p>
+          <h2>Iteration 1: Plain SQL</h2>
 
           <table>
             <tbody>
@@ -295,16 +291,16 @@
         </section>
 
         <section>
-          <p>iteration 1: plain sql</p>
+          <h2>Iteration 1: Plain SQL</h2>
           <dl>
-            <dt>pros:</dt>
-            <dd>simple and readable</dd>
-            <dd>easy to debug</dd>
-            <dd>probably the best option for big reports and exports</dd>
+            <dt>Pros:</dt>
+            <dd>Simple and readable</dd>
+            <dd>Easy to debug</dd>
+            <dd>Probably the best option for big reports and exports</dd>
 
-            <dt>cons:</dt>
-            <dd>no activerecord::relation flexibility</dd>
-            <dd>hard to combine them in different ways</dd>
+            <dt>Cons:</dt>
+            <dd>Not flexibile</dd>
+            <dd>Not database agnostic</dd>
           </dl>
         </section>
 
@@ -319,11 +315,11 @@
         </section>
 
         <section>
-          <img src="assets/images/arel.jpg" class="stretch">
+          <img src="assets/images/arel.png" class="stretch">
         </section>
 
         <section>
-          <p>Iteration 2: Arel</p>
+          <h2>Iteration 2: Arel</h2>
           <pre><code data-trim>
           Clinic.arel_table # => Arel::Table
           Clinic.arel_table[:name] # => Arel::Attributes::Attribute
@@ -338,7 +334,7 @@
         </section>
 
         <section>
-          <p>Iteration 2: Arel</p>
+          <h2>Iteration 2: Arel</h2>
           <pre><code data-trim>
           class Clinic
             has_many :case_numbers
@@ -358,7 +354,7 @@
         </section>
 
         <section>
-          <p>Iteration 2: Arel</p>
+          <h2>Iteration 2: Arel</h2>
           <pre><code data-trim>
           class Clinic
             has_many :case_numbers
@@ -404,7 +400,7 @@
         </section>
 
         <section>
-          <p>Iteration 2: Arel</p>
+          <h2>Iteration 2: Arel</h2>
           <pre><code data-trim>
           case_numbers = CaseNumber.arel_table
           cte_table = Arel::Table.new(:cool_case_numbers)
@@ -421,7 +417,7 @@
         </section>
 
         <section>
-          <p>Iteration 2: Arel</p>
+          <h2>Iteration 2: Arel</h2>
 
           <table>
             <tbody>
@@ -450,7 +446,7 @@
         </section>
 
         <section>
-          <p>Iteration 2: Arel</p>
+          <h2>Iteration 2: Arel</h2>
           <dl>
             <dt>Pros:</dt>
             <dd>Super Powers</dd>
@@ -465,8 +461,7 @@
         <section>
           <h2>Iteration 3: Extend Rails</h2>
           <p class="fragment">How hard can it be to add CTE support to Rails?</p>
-          <p class="fragment"><code>.with</code> is already in the Arel ...</p>
-          <p class="fragment">so it shouldn't be too hard i guess?</p>
+          <p class="fragment"><code>.with</code> is already in Arel ...</p>
         </section>
 
         <section>
@@ -486,7 +481,7 @@
         </section>
 
 				<section>
-          <p>Iteration 3: Extend Rails</p>
+          <h2>Iteration 3: Extend Rails</h2>
           <pre><code data-trim>
           module ActiveRecord
             module Querying
@@ -539,7 +534,7 @@
         </section>
 
 				<section>
-          <p>Iteration 3: Extend Rails</p>
+          <h2>Iteration 3: Extend Rails</h2>
           <pre><code data-trim>
           class Clinic
             has_many :case_numbers
@@ -575,6 +570,35 @@
         </section>
 
         <section>
+          <h2>Iteration 3: Extend Rails</h2>
+
+          <table>
+            <tbody>
+              <tr>
+                <td>Chainable</td>
+                <td>&#x1F600;</td>
+              </tr>
+              <tr>
+                <td>Calculations</td>
+                <td>&#x1F600;</td>
+              </tr>
+              <tr>
+                <td>Create, Update, Delete</td>
+                <td>&#x1F600;</td>
+              </tr>
+              <tr>
+                <td>Lazy Load</td>
+                <td>&#x1F600;</td>
+              </tr>
+              <tr>
+                <td>Cache</td>
+                <td>&#x1F600;</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section>
           <h2>iteration 2: Extend Rails</h2>
           <dl>
             <dt>Pros:</dt>
@@ -583,8 +607,12 @@
             <dd>All ActiveRecord::Relation goodies</dd>
 
             <dt>Cons:</dt>
-            <dd>Too Sexy</dd>
+            <dd>Monkey patch</dd>
           </dl>
+        </section>
+
+        <section>
+          <img src="assets/images/rails_pr.png" class="stretch">
         </section>
 
         <section>
@@ -615,12 +643,6 @@
 
         <section>
           <h2>Sequel</h2>
-          <pre><code data-trim>
-          CREATE VIEW cool_clinics AS (
-            SELECT sum(count) ...
-          )
-          SELECT * FROM cool_clinics
-          </code></pre>
 
           <ul>
             <li>Small core + plugin system</li>
